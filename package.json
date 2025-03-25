@@ -1,0 +1,49 @@
+{
+  "name": "soundbackgrounds",
+  "version": "1.0.0",
+  "description": "Framework agnostic soundbackgrounds reactive to sound input. Users can load their own cartridges for visualizations.",
+  "main": "dist/soundbackgrounds.umd.js",
+  "module": "dist/soundbackgrounds.es.js",
+  "exports": {
+    ".": {
+      "import": "./dist/soundbackgrounds.es.js",
+      "require": "./dist/soundbackgrounds.umd.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "deploy": "gh-pages -d dist"
+  },
+  "dependencies": {
+    "p5": "^1.4.0"
+  },
+  "devDependencies": {
+    "vite": "^4.0.0",
+    "vitest": "^1.2.0",
+    "jsdom": "^24.0.0",
+    "gh-pages": "^5.0.0"
+  },
+  "keywords": [
+    "sound",
+    "visualization",
+    "p5.js",
+    "reactive"
+  ],
+  "author": "Juan Manuel Daza <juanmanueldaza@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/juanmanueldaza/soundbackgrounds.git"
+  },
+  "bugs": {
+    "url": "https://github.com/juanmanueldaza/soundbackgrounds/issues"
+  },
+  "homepage": "https://soundbackgrounds.ultravietnamita.com.ar"
+}
