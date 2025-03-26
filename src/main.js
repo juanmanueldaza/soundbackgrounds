@@ -1,80 +1,127 @@
-import p5 from 'p5';
+import p5 from "p5";
+import { AudioManager } from "./audio/AudioManager.js";
+import { RenderingEngine } from "./rendering/RenderingEngine.js";
+import { CartridgeManager } from "./cartridge/CartridgeManager.js";
 
-// Clase para el contexto de dibujo
-class DrawingContext {
-    constructor(p) {
-        this.p = p;
+// Configuration constants
+const DEFAULT_FRAME_RATE = 60;
+const DEFAULT_BACKGROUND = 0; // Black
+
+class SoundBackgrounds {
+  constructor() {
+    this.p5Instance = null;
+    this.audioManager = new AudioManager();
+    this.renderingEngine = null;
+    this.cartridgeManager = new CartridgeManager();
+    this.isInitialized = false;
+  }
+
+  async initialize(config = {}) {
+    if (this.isInitialized) {
+      return this;
     }
 
-    noStroke() { this.p.noStroke(); }
-    fill(r, g, b) { this.p.fill(r, g, b); }
-    rect(x, y, w, h) { this.p.rect(x, y, w, h); }
-    map(value, start1, stop1, start2, stop2) {
-        return this.p.map(value, start1, stop1, start2, stop2);
+    // Load p5.js if needed
+    if (typeof window !== "undefined" && !window.p5) {
+      window.p5 = p5;
+      if (process.env.NODE_ENV !== "test") {
+        try {
+          await import("p5/lib/addons/p5.sound.js");
+        } catch (error) {
+          console.error("Failed to load p5.sound.js", error);
+          throw new Error("Could not initialize audio capabilities");
+        }
+      }
     }
+
+    // Create p5 instance
+    return new Promise((resolve) => {
+      this.p5Instance = new p5((p) => {
+        // Store reference
+        const renderingEngine = new RenderingEngine(p);
+        this.renderingEngine = renderingEngine;
+
+        // Setup function
+        p.setup = async () => {
+          // Initialize canvas
+          renderingEngine.initialize(config.canvasParent);
+
+          // Set frame rate
+          p.frameRate(config.frameRate || DEFAULT_FRAME_RATE);
+
+          // Initialize audio with options
+          const audioAnalyzer = await this.audioManager.initialize(p, {
+            smoothing: config.audioSmoothing,
+            binCount: config.audioBinCount,
+          });
+
+          // Mark as initialized
+          this.isInitialized = true;
+          resolve(this);
+        };
+
+        // The draw function remains the same
+        // ...
+      });
+    });
+  }
+
+  /**
+   * Registers a visualization cartridge
+   * @param {Cartridge} cartridge - The cartridge to register
+   * @returns {Promise<{soundbackgrounds: SoundBackgrounds, id: string}>} This instance and cartridge id
+   */
+  async registerCartridge(cartridge) {
+    if (!this.isInitialized) {
+      await this.initialize();
+    }
+
+    const id = this.cartridgeManager.registerCartridge(cartridge);
+
+    // Setup the cartridge
+    const ctx = this.renderingEngine.getDrawingContext();
+    this.cartridgeManager.setupCartridge(ctx);
+
+    return { soundbackgrounds: this, id };
+  }
+
+  /**
+   * Removes a registered cartridge
+   * @param {string} id - The cartridge ID to remove
+   * @returns {boolean} True if removed, false if not found
+   */
+  removeCartridge(id) {
+    return this.cartridgeManager.removeCartridge(id);
+  }
+
+  /**
+   * Cleans up resources and stops audio processing
+   * @returns {Promise<SoundBackgrounds>} This instance
+   */
+  async destroy() {
+    // Stop audio capture if active
+    if (this.audioManager?.audioSource) {
+      try {
+        this.audioManager.audioSource.stop();
+      } catch (error) {
+        console.warn("Error stopping audio source:", error);
+      }
+    }
+
+    // Remove p5 instance
+    if (this.p5Instance) {
+      this.p5Instance.remove();
+      this.p5Instance = null;
+    }
+
+    // Reset state
+    this.renderingEngine = null;
+    this.isInitialized = false;
+
+    return this;
+  }
 }
 
-const soundbackgrounds = {
-    p5Instance: null,
-    drawingContext: null,
-
-    async initialize() {
-        if (typeof window !== 'undefined' && !window.p5) {
-            window.p5 = p5;
-            if (process.env.NODE_ENV !== 'test') {
-                await import('p5/lib/addons/p5.sound.js');
-            }
-        }
-        return this;
-    },
-
-    async registerCartridge(cartridge) {
-        await this.initialize();
-
-        return new Promise((resolve) => {
-            const initSketch = () => {
-                this.p5Instance = new p5((p) => {
-                    this.drawingContext = new DrawingContext(p);
-                    let audioContext = process.env.NODE_ENV === 'test' ? 
-                        { analyze: () => Array(10).fill(128) } : 
-                        this._setupAudio(p);
-
-                    p.setup = () => {
-                        p.createCanvas(p.windowWidth, p.windowHeight);
-                        cartridge.setupCartridge(this.drawingContext);
-                    };
-
-                    p.draw = () => {
-                        p.background(200);
-                        const spectrum = audioContext.analyze();
-                        cartridge.drawCartridge(this.drawingContext, spectrum, p.width, p.height);
-                    };
-
-                    p.windowResized = () => p.resizeCanvas(p.windowWidth, p.windowHeight);
-                });
-                resolve(this);
-            };
-
-            if (process.env.NODE_ENV === 'test' || window.p5.AudioIn) {
-                initSketch();
-            } else {
-                const checkAudio = setInterval(() => {
-                    if (window.p5.AudioIn) {
-                        clearInterval(checkAudio);
-                        initSketch();
-                    }
-                }, 100);
-            }
-        });
-    },
-
-    _setupAudio(p) {
-        const mic = new p5.AudioIn();
-        const fft = new p5.FFT();
-        mic.start();
-        fft.setInput(mic);
-        return fft;
-    }
-};
-
+// Export singleton
+const soundbackgrounds = new SoundBackgrounds();
 export default soundbackgrounds;
