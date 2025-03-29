@@ -16,5 +16,17 @@ export default defineConfig({
         }
       }
     }
+  },
+  server: {
+    headers: {
+      'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self'; connect-src 'self';",
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'SAMEORIGIN',
+      'X-XSS-Protection': '1; mode=block',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'Permissions-Policy': 'microphone=self',
+      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains'
+    },
+    https: true // Forzar HTTPS en desarrollo
   }
 });

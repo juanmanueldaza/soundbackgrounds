@@ -1,28 +1,58 @@
+import { CartridgeValidator } from '../security/CartridgeValidator.js';
+import { RateLimiter } from '../security/RateLimiter.js';
+
 /**
- * Manages visualization cartridges and their states
+ * @typedef {Object} Cartridge
+ * @property {Function} setupCartridge - Initial setup function
+ * @property {Function} drawCartridge - Drawing function
+ */
+
+/**
+ * Manages cartridge lifecycle and state
  */
 export class CartridgeManager {
   constructor() {
     this.cartridges = []; // Array of {id, cartridge} objects
     this.cartridgeStates = new Map(); // Map of id -> state
+    this.rateLimiter = new RateLimiter(100, 60000); // Maximum 100 operations per minute
+    this.activeOperations = new Set();
   }
 
   /**
    * Registers a new cartridge
    * @param {Cartridge} cartridge - The cartridge to register
    * @returns {string} Unique ID for the registered cartridge
+   * @throws {Error} If registration limit is exceeded or cartridge is invalid
    */
   registerCartridge(cartridge) {
-    // Generate unique ID (simplified version if crypto is not available)
-    const id =
-      typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : "_" + Math.random().toString(36).substring(2, 11);
+    if (!this.rateLimiter.isAllowed('register')) {
+      throw new Error('Too many registration attempts. Please try again later.');
+    }
 
-    this.cartridges.push({ id, cartridge });
-    this.cartridgeStates.set(id, {});
+    // Validate cartridge
+    CartridgeValidator.validateCartridge(cartridge);
 
-    return id;
+    // Generate secure ID
+    const id = crypto.randomUUID();
+
+    // Timeout for operations
+    const operationTimeout = setTimeout(() => {
+      if (this.activeOperations.has(id)) {
+        this.removeCartridge(id);
+        throw new Error('Operation timeout');
+      }
+    }, 30000);
+
+    this.activeOperations.add(id);
+
+    try {
+      this.cartridges.push({ id, cartridge });
+      this.cartridgeStates.set(id, {});
+      return id;
+    } finally {
+      clearTimeout(operationTimeout);
+      this.activeOperations.delete(id);
+    }
   }
 
   /**
@@ -60,6 +90,14 @@ export class CartridgeManager {
    * @param {number} height - Canvas height
    */
   drawCartridge(drawingContext, audioData, width, height) {
+    if (!this.rateLimiter.isAllowed('draw')) {
+      console.warn('Drawing rate limit exceeded');
+      return;
+    }
+
+    // Sanitize audio data
+    const sanitizedAudioData = this._sanitizeAudioData(audioData);
+
     for (const { id, cartridge } of this.cartridges) {
       if (cartridge.drawCartridge) {
         const currentState = this.cartridgeStates.get(id) || {};
@@ -68,7 +106,7 @@ export class CartridgeManager {
         const updatedState =
           cartridge.drawCartridge(
             drawingContext,
-            audioData,
+            sanitizedAudioData,
             width,
             height,
             currentState,
@@ -78,5 +116,17 @@ export class CartridgeManager {
         this.cartridgeStates.set(id, updatedState);
       }
     }
+  }
+
+  /**
+   * Sanitizes audio data
+   * @param {number[]} audioData - Audio spectrum data
+   * @returns {Float32Array} Sanitized audio data
+   */
+  _sanitizeAudioData(audioData) {
+    if (!Array.isArray(audioData)) return new Float32Array(1024);
+    return audioData.map(value => 
+      Math.min(Math.max(Number(value) || 0, 0), 255)
+    );
   }
 }

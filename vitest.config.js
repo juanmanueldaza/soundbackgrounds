@@ -7,7 +7,11 @@ export default defineConfig({
         testTimeout: 10000,
         setupFiles: ['./test/setup.js'],
         deps: {
-            inline: ['p5']
+            optimizer: {
+                web: {
+                    include: ['p5']
+                }
+            }
         }
     }
 });

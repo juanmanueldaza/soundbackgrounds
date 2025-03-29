@@ -5,6 +5,33 @@ export class AudioManager {
   constructor() {
     this.analyzer = null;
     this.audioSource = null;
+    this._metrics = {
+      drops: 0,
+      totalSamples: 0,
+      peakLevel: 0
+    };
+  }
+
+  /**
+   * Validate audio permissions and security constraints
+   * @private
+   */
+  async _validateSecurity() {
+    // Verify if we're in a secure context (HTTPS)
+    if (typeof window !== 'undefined' && window.location.protocol !== 'https:') {
+      throw new Error('Audio capture requires HTTPS for security reasons');
+    }
+
+    // Explicitly verify permissions
+    try {
+      const permissionStatus = await navigator.permissions.query({ name: 'microphone' });
+      if (permissionStatus.state === 'denied') {
+        throw new Error('Microphone access denied');
+      }
+    } catch (error) {
+      console.error('Permission check failed:', error);
+      throw new Error('Could not verify microphone permissions');
+    }
   }
 
   /**
@@ -20,21 +47,39 @@ export class AudioManager {
       return new MockAudioAnalyzer();
     }
 
-    await this._ensureAudioLibraryLoaded();
+    try {
+      await this._validateSecurity();
+      await this._ensureAudioLibraryLoaded();
 
-    // Create audio source and analyzer
-    const mic = new p5Instance.AudioIn();
-    const fft = new p5Instance.FFT(
-      options.smoothing || 0.8,
-      options.binCount || 1024,
-    );
-    mic.start();
-    fft.setInput(mic);
+      // Sanitize options
+      const sanitizedOptions = {
+        smoothing: Math.min(Math.max(options.smoothing || 0.8, 0), 1),
+        binCount: Math.min(Math.max(options.binCount || 1024, 32), 2048)
+      };
 
-    this.analyzer = fft;
-    this.audioSource = mic;
+      // Create audio source and analyzer with improved error handling
+      const mic = new p5Instance.AudioIn();
+      const fft = new p5Instance.FFT(
+        sanitizedOptions.smoothing,
+        sanitizedOptions.binCount
+      );
 
-    return new P5AudioAnalyzer(this.analyzer);
+      await new Promise((resolve, reject) => {
+        mic.start(() => resolve(), (error) => reject(error));
+      });
+
+      fft.setInput(mic);
+      this.analyzer = fft;
+      this.audioSource = mic;
+
+      // Add monitoring
+      setInterval(() => this._reportMetrics(), 5000);
+
+      return new P5AudioAnalyzer(this.analyzer);
+    } catch (error) {
+      console.error('Audio initialization failed:', error);
+      throw new Error('Could not initialize audio system securely');
+    }
   }
 
   /**
@@ -43,17 +88,43 @@ export class AudioManager {
    * @returns {Promise<void>}
    */
   async _ensureAudioLibraryLoaded() {
-    // Logic to ensure p5.sound is loaded
-    if (typeof window !== "undefined" && !window.p5.AudioIn) {
-      return new Promise((resolve) => {
-        const checkAudio = setInterval(() => {
-          if (window.p5.AudioIn) {
-            clearInterval(checkAudio);
-            resolve();
-          }
-        }, 100);
-      });
+    if (typeof window === "undefined" || window.p5?.AudioIn) {
+      return;
     }
+
+    const MAX_WAIT_TIME = 5000;
+    const CHECK_INTERVAL = 50;
+    let elapsedTime = 0;
+
+    return new Promise((resolve, reject) => {
+      const check = () => {
+        if (window.p5?.AudioIn) {
+          return resolve();
+        }
+        
+        elapsedTime += CHECK_INTERVAL;
+        if (elapsedTime >= MAX_WAIT_TIME) {
+          reject(new Error('p5.sound library load timeout'));
+          return;
+        }
+        
+        requestAnimationFrame(check);
+      };
+      
+      requestAnimationFrame(check);
+    });
+  }
+
+  /**
+   * Reports audio metrics
+   * @private
+   */
+  _reportMetrics() {
+    const dropRate = (this._metrics.drops / Math.max(this._metrics.totalSamples, 1)) * 100;
+    if (dropRate > 5) {
+      console.warn(`Audio drops: ${dropRate.toFixed(2)}% - Peak level: ${this._metrics.peakLevel}`);
+    }
+    this._metrics = { drops: 0, totalSamples: 0, peakLevel: 0 };
   }
 }
 
@@ -72,7 +143,21 @@ export class P5AudioAnalyzer extends AudioAnalyzer {
   }
 
   analyze() {
-    return this.fft.analyze();
+    const data = this.fft.analyze();
+    this._updateMetrics(data);
+    return data;
+  }
+
+  /**
+   * Updates audio metrics
+   * @private
+   * @param {Array<number>} data - Frequency data
+   */
+  _updateMetrics(data) {
+    const peak = Math.max(...data);
+    this._metrics.totalSamples++;
+    this._metrics.peakLevel = Math.max(this._metrics.peakLevel, peak);
+    if (peak < 1) this._metrics.drops++;
   }
 }
 

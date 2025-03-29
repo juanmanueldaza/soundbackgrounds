@@ -2,6 +2,6 @@ import { beforeAll, vi } from 'vitest';
 
 beforeAll(() => {
     process.env.NODE_ENV = 'test';
-    // Silenciar advertencias de p5.sound
+    // Silence p5.sound warnings
     console.warn = vi.fn();
 });
