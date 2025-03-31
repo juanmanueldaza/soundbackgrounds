@@ -2,18 +2,6 @@
 
 > Real-time audio visualization framework with cartridge architecture and performance optimization.
 
-[![NPM Version](https://img.shields.io/npm/v/soundbackgrounds.svg)](https://npmjs.org/package/soundbackgrounds)
-[![Build Status](https://travis-ci.org/juanmanueldaza/soundbackgrounds.svg?branch=main)](https://travis-ci.org/juanmanueldaza/soundbackgrounds)
-[![Coverage Status](https://coveralls.io/repos/github/juanmanueldaza/soundbackgrounds/badge.svg?branch=main)](https://coveralls.io/github/juanmanueldaza/soundbackgrounds?branch=main)
-
-## Technical Features
-
-| Category | Specifications |
-|----------|---------------|
-| Performance | • CPU: <16ms/frame<br>• Memory: <100MB<br>• Audio: Drop rate <5% |
-| Security | • Cartridge sandbox<br>• Rate limiting<br>• Input validation |
-| Optimization | • TypedArrays<br>• Buffer pre-allocation<br>• Frame monitoring |
-
 ## Installation
 
 ```bash
@@ -76,13 +64,6 @@ interface RuntimeMetrics {
   };
 }
 ```
-
-## Advanced Guides
-
-- [Performance Optimization](docs/performance.md)
-- [Security and Validation](docs/security.md)
-- [Cartridge Architecture](docs/cartridges.md)
-- [Metrics and Monitoring](docs/metrics.md)
 
 ## Contributions
 
